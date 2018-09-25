@@ -1,0 +1,113 @@
+defaults: &defaults
+  docker:
+  - image: golang:1.11
+  working_directory: /go/src/github.com/displague/cluster-api-provider-linode
+
+version: 2
+jobs:
+  checkout_code:
+    <<: *defaults
+    steps:
+    - checkout
+    - save_cache:
+        key: repo-{{ .Environment.CIRCLE_SHA1 }}
+        paths:
+        - /go/src/github.com/displague/cluster-api-provider-linode
+
+  check-dependencies:
+    <<: *defaults
+    steps:
+    - restore_cache:
+        key: repo-{{ .Environment.CIRCLE_SHA1 }}
+    - run: export DEP_RELEASE_TAG=v0.5.0; curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+    - run: dep status
+
+  lint:
+    <<: *defaults
+    docker:
+    - image: quay.io/kubermatic/gometalinter:latest
+    steps:
+    - restore_cache:
+        key: repo-{{ .Environment.CIRCLE_SHA1 }}
+    - run: gometalinter --config gometalinter.json ./...
+
+  test:
+    <<: *defaults
+    steps:
+    - restore_cache:
+        key: repo-{{ .Environment.CIRCLE_SHA1 }}
+    - run: go test -race ./...
+
+  build:
+    <<: *defaults
+    steps:
+    - restore_cache:
+        key: repo-{{ .Environment.CIRCLE_SHA1 }}
+    - run: DEP_RELEASE_TAG=v0.5.0 curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+    - run: make compile
+    - save_cache:
+        key: cluster-api-provider-linode-{{ .Revision }}
+        paths:
+        - /go/src/github.com/displague/cluster-api-provider-linode
+
+  publish:
+    <<: *defaults
+    docker:
+    - image: docker:stable
+    steps:
+    - restore_cache:
+        key: repo-{{ .Environment.CIRCLE_SHA1 }}
+    - restore_cache:
+        key: cluster-api-provider-linode-{{ .Revision }}
+    - setup_remote_docker
+    - run: apk update && apk add make bash git
+    - run: |
+        set -e
+        export GIT_TAG=$CIRCLE_TAG
+        docker login -u "${DOCKERHUB_USER}" -p "${DOCKERHUB_PASS}" quay.io
+        make images-nodep
+        make push-nodep
+
+workflows:
+  version: 2
+  build:
+    jobs:
+    - checkout_code:
+        filters:
+          tags:
+            only: /v.*/
+    - check-dependencies:
+        requires:
+        - checkout_code
+        filters:
+          tags:
+            only: /v.*/
+    - lint:
+        requires:
+        - checkout_code
+        filters:
+          tags:
+            only: /v.*/
+    - test:
+        requires:
+        - checkout_code
+        filters:
+          tags:
+            only: /v.*/
+    - build:
+        requires:
+        - checkout_code
+        filters:
+          tags:
+            only: /v.*/
+    - publish:
+        requires:
+        - build
+        - test
+        - check-dependencies
+        filters:
+          branches:
+            ignore: /.*/
+          tags:
+            only: /v.*/
+
