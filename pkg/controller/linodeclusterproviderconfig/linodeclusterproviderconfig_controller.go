@@ -21,7 +21,7 @@ import (
 	"log"
 	"reflect"
 
-	linodeproviderconfigv1alpha1 "cluster-api-provider-linode/pkg/apis/linodeproviderconfig/v1alpha1"
+	linodeproviderconfigv1alpha1 "github.com/displague/cluster-api-provider-linode/pkg/apis/linodeproviderconfig/v1alpha1"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"

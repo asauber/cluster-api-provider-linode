@@ -17,7 +17,7 @@ limitations under the License.
 package controller
 
 import (
-	"cluster-api-provider-linode/pkg/controller/linodeclusterproviderconfig"
+	"github.com/displague/cluster-api-provider-linode/pkg/controller/linodeclusterproviderconfig"
 )
 
 func init() {
