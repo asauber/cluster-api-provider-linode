@@ -48,12 +48,16 @@ To create your first cluster using `cluster-api-provider-linode`, you need to us
 * `provider-components.yaml` - contains deployment manifest for controllers, userdata used to bootstrap machines, a secret with SSH key for the `machine-controller` and a secret with Linode API Access Token.
 * [Optional] `addons.yaml` - used to deploy additional components once the cluster is bootstrapped, such as [Linode Cloud Controller Manager](https://github.com/pharmer/ccm-linode) and [Linode CSI plugin](https://github.com/displague/csi-linode).
 
-The manifests can be generated automatically by using the [`generate-yaml.sh`](./clusterctl/examples/linode/generate-yaml.sh) script, located in the `clusterctl/examples/linode` directory:
+Create the `cluster.yaml`, `machines.yaml`, `provider-components.yaml`, and `addons.yaml` files:
 ```bash
-cd clusterctl/examples/linode
+cd cmd/clusterctl/examples/linode
 ./generate-yaml.sh
-cd ../..
+cd ../../../..
+kustomize build config/default/ > cmd/clusterctl/examples/linode/provider-components.yaml
+echo "---" >> cmd/clusterctl/examples/linode/provider-components.yaml
+kustomize build vendor/sigs.k8s.io/cluster-api/config/default/ >> cmd/clusterctl/examples/linode/provider-components.yaml
 ```
+
 The result of the script is an `out` directory with generated manifests and a generated SSH key to be used by the `machine-controller`. More details about how it generates manifests and how to customize them can be found in the [README file in `clusterctl/examples/linode` directory](./clusterctl/examples/linode).
 
 As a temporary workaround for a bug with SSH keys, you need to copy the generated private key to the `/etc/sshkeys` directory, name it `private`, and give it read permissions for your user:

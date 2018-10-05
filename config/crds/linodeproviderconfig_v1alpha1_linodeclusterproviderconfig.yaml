@@ -20,10 +20,6 @@ spec:
           type: string
         metadata:
           type: object
-        spec:
-          type: object
-        status:
-          type: object
   version: v1alpha1
 status:
   acceptedNames:
