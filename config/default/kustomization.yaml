@@ -18,6 +18,8 @@ namePrefix: cluster-api-provider-linode-
 # YAML string, with resources separated by document
 # markers ("---").
 resources:
+- ../crds/linodeproviderconfig_v1alpha1_linodeclusterproviderconfig.yaml
+- ../crds/linodeproviderconfig_v1alpha1_linodemachineproviderconfig.yaml
 - ../rbac/rbac_role.yaml
 - ../rbac/rbac_role_binding.yaml
 - ../manager/manager.yaml

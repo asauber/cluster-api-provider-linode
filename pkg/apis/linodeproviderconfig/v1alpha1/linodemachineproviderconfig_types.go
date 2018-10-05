@@ -20,28 +20,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-// The MachineRole indicates the purpose of the Machine, and will determine
-// what software and configuration will be used when provisioning and managing
-// the Machine. A single Machine may have more than one role, and the list and
-// definitions of supported roles is expected to evolve over time.
-//
-// Currently, only two roles are supported: Master and Node. In the future, we
-// expect user needs to drive the evolution and granularity of these roles,
-// with new additions accommodating common cluster patterns, like dedicated
-// etcd Machines.
-//
-//                 +-----------------------+------------------------+
-//                 | Master present        | Master absent          |
-// +---------------+-----------------------+------------------------|
-// | Node present: | Install control plane | Join the cluster as    |
-// |               | and be schedulable    | just a node            |
-// |---------------+-----------------------+------------------------|
-// | Node absent:  | Install control plane | Invalid configuration  |
-// |               | and be unschedulable  |                        |
-// +---------------+-----------------------+------------------------+
 type MachineRole string
 
 const (
@@ -49,13 +27,19 @@ const (
 	NodeRole   MachineRole = "Node"
 )
 
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // LinodeMachineProviderConfig is the Schema for the linodemachineproviderconfigs API
 // +k8s:openapi-gen=true
 type LinodeMachineProviderConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Roles []MachineRole `json:"roles,omitempty"`
+	Roles  []MachineRole `json:"roles,omitempty"`
+	Region string        `json:"region"`
+	Type   string        `json:"type"`
+	Image  string        `json:"image"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

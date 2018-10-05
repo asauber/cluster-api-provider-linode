@@ -1,6 +1,6 @@
 
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= asauber/cluster-api-provider-linode:latest
 
 all: test manager
 

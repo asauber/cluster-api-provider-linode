@@ -16,14 +16,24 @@ spec:
       properties:
         apiVersion:
           type: string
+        image:
+          type: string
         kind:
           type: string
         metadata:
           type: object
-        spec:
-          type: object
-        status:
-          type: object
+        region:
+          type: string
+        roles:
+          items:
+            type: string
+          type: array
+        type:
+          type: string
+      required:
+      - region
+      - type
+      - image
   version: v1alpha1
 status:
   acceptedNames:
