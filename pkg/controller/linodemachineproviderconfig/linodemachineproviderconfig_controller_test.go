@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	linodeproviderconfigv1alpha1 "cluster-api-provider-linode/pkg/apis/linodeproviderconfig/v1alpha1"
+	linodeproviderconfigv1alpha1 "github.com/displague/cluster-api-provider-linode/pkg/apis/linodeproviderconfig/v1alpha1"
 
 	"github.com/onsi/gomega"
 	"golang.org/x/net/context"

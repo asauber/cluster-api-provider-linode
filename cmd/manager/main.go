@@ -19,8 +19,8 @@ package main
 import (
 	"log"
 
-	"cluster-api-provider-linode/pkg/apis"
-	"cluster-api-provider-linode/pkg/controller"
+	"github.com/displague/cluster-api-provider-linode/pkg/apis"
+	"github.com/displague/cluster-api-provider-linode/pkg/controller"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"

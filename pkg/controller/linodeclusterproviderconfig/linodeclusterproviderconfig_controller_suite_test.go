@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"cluster-api-provider-linode/pkg/apis"
+	"github.com/displague/cluster-api-provider-linode/pkg/apis"
 
 	"github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"

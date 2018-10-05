@@ -20,23 +20,34 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-// LinodeMachineProviderConfigSpec defines the desired state of LinodeMachineProviderConfig
-type LinodeMachineProviderConfigSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-}
-
-// LinodeMachineProviderConfigStatus defines the observed state of LinodeMachineProviderConfig
-type LinodeMachineProviderConfigStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-}
-
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// The MachineRole indicates the purpose of the Machine, and will determine
+// what software and configuration will be used when provisioning and managing
+// the Machine. A single Machine may have more than one role, and the list and
+// definitions of supported roles is expected to evolve over time.
+//
+// Currently, only two roles are supported: Master and Node. In the future, we
+// expect user needs to drive the evolution and granularity of these roles,
+// with new additions accommodating common cluster patterns, like dedicated
+// etcd Machines.
+//
+//                 +-----------------------+------------------------+
+//                 | Master present        | Master absent          |
+// +---------------+-----------------------+------------------------|
+// | Node present: | Install control plane | Join the cluster as    |
+// |               | and be schedulable    | just a node            |
+// |---------------+-----------------------+------------------------|
+// | Node absent:  | Install control plane | Invalid configuration  |
+// |               | and be unschedulable  |                        |
+// +---------------+-----------------------+------------------------+
+type MachineRole string
+
+const (
+	MasterRole MachineRole = "Master"
+	NodeRole   MachineRole = "Node"
+)
 
 // LinodeMachineProviderConfig is the Schema for the linodemachineproviderconfigs API
 // +k8s:openapi-gen=true
@@ -44,8 +55,7 @@ type LinodeMachineProviderConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   LinodeMachineProviderConfigSpec   `json:"spec,omitempty"`
-	Status LinodeMachineProviderConfigStatus `json:"status,omitempty"`
+	Roles []MachineRole `json:"roles,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
