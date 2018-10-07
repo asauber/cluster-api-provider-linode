@@ -40,11 +40,28 @@ spec:
         control-plane: controller-manager
         controller-tools.k8s.io: "1.0"
     spec:
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoExecute
+        key: node.alpha.kubernetes.io/notReady
+        operator: Exists
+      - effect: NoExecute
+        key: node.alpha.kubernetes.io/unreachable
+        operator: Exists
       containers:
-      - command:
-        - /root/manager
-        image: controller:latest
-        name: manager
+      - name: manager
+        image: SET_BY_PATCH
+        args:
+        - "-logtostderr=true"
+        - "-stderrthreshold=INFO"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/kubernetes
+        - name: certs
+          mountPath: /etc/ssl/certs
         resources:
           limits:
             cpu: 100m
@@ -52,4 +69,11 @@ spec:
           requests:
             cpu: 100m
             memory: 20Mi
+      volumes:
+      - name: config
+        hostPath:
+          path: /etc/kubernetes
+      - name: certs
+        hostPath:
+          path: /etc/ssl/certs
       terminationGracePeriodSeconds: 10

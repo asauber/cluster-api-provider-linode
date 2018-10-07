@@ -1,5 +1,6 @@
 /*
 Copyright 2018 Linode, LLC.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,18 +18,23 @@ limitations under the License.
 package main
 
 import (
+	"flag"
 	"log"
 
 	"github.com/displague/cluster-api-provider-linode/pkg/apis"
+	"github.com/displague/cluster-api-provider-linode/pkg/cloud/linode"
 	"github.com/displague/cluster-api-provider-linode/pkg/controller"
-
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	clusterapis "sigs.k8s.io/cluster-api/pkg/apis"
+	clustercommon "sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 )
 
 func main() {
+	flag.Parse()
+
 	// Get a config to talk to the apiserver
 	cfg, err := config.GetConfig()
 	if err != nil {
@@ -41,10 +47,23 @@ func main() {
 		log.Fatal(err)
 	}
 
+	log.Printf("Initializing Dependencies.")
+	machineActuator, err := linode.NewMachineActuator(mgr, linode.MachineActuatorParams{
+		Scheme: mgr.GetScheme(),
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	clustercommon.RegisterClusterProvisioner(linode.ProviderName, machineActuator)
+
 	log.Printf("Registering Components.")
 
 	// Setup Scheme for all resources
 	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := clusterapis.AddToScheme(mgr.GetScheme()); err != nil {
 		log.Fatal(err)
 	}
 

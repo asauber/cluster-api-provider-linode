@@ -5,18 +5,6 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - apps
-  resources:
-  - deployments
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
   - linodeproviderconfig.linode.com
   resources:
   - linodeclusterproviderconfigs
@@ -29,9 +17,9 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - apps
+  - linodeproviderconfig.linode.com
   resources:
-  - deployments
+  - linodemachineproviderconfigs
   verbs:
   - get
   - list
@@ -41,9 +29,24 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - linodeproviderconfig.linode.com
+  - cluster.k8s.io
   resources:
-  - linodemachineproviderconfigs
+  - clusters
+  - machines
+  - machinedeployments
+  - machinesets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - nodes
   verbs:
   - get
   - list
