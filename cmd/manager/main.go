@@ -49,7 +49,8 @@ func main() {
 
 	log.Printf("Initializing Dependencies.")
 	machineActuator, err := linode.NewMachineActuator(mgr, linode.MachineActuatorParams{
-		Scheme: mgr.GetScheme(),
+		Scheme:        mgr.GetScheme(),
+		EventRecorder: mgr.GetRecorder("linode-controller"),
 	})
 	if err != nil {
 		log.Fatal(err)
