@@ -27,7 +27,8 @@ func init() {
 	// AddToManagerFuncs is a list of functions to create controllers and add them to a manager.
 	AddToManagerFuncs = append(AddToManagerFuncs, func(m manager.Manager) error {
 		actuator, err := linode.NewMachineActuator(m, linode.MachineActuatorParams{
-			Scheme: m.GetScheme(),
+			Scheme:        m.GetScheme(),
+			EventRecorder: m.GetRecorder("linode-controller"),
 		})
 		if err != nil {
 			return err

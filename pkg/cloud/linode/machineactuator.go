@@ -29,8 +29,11 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	yaml "gopkg.in/yaml.v2"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
+	apierrors "sigs.k8s.io/cluster-api/pkg/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
@@ -39,21 +42,30 @@ const (
 	ProviderName = "linode"
 )
 
+const (
+	createEventAction = "Create"
+	deleteEventAction = "Delete"
+	noEventAction     = ""
+)
+
 type LinodeClient struct {
-	client       client.Client
-	linodeClient *linodego.Client
-	scheme       *runtime.Scheme
+	client        client.Client
+	linodeClient  *linodego.Client
+	scheme        *runtime.Scheme
+	eventRecorder record.EventRecorder
 }
 
 type MachineActuatorParams struct {
-	Scheme *runtime.Scheme
+	Scheme        *runtime.Scheme
+	EventRecorder record.EventRecorder
 }
 
 func NewMachineActuator(m manager.Manager, params MachineActuatorParams) (*LinodeClient, error) {
 	return &LinodeClient{
-		client:       m.GetClient(),
-		linodeClient: newLinodeAPIClient(),
-		scheme:       params.Scheme,
+		client:        m.GetClient(),
+		linodeClient:  newLinodeAPIClient(),
+		scheme:        params.Scheme,
+		eventRecorder: params.EventRecorder,
 	}, nil
 }
 
@@ -76,14 +88,90 @@ func newLinodeAPIClient() *linodego.Client {
 	}
 
 	linodeClient := linodego.NewClient(oauth2Client)
-	linodeClient.SetDebug(true)
 	return &linodeClient
 }
 
-func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
-	glog.Infof("TODO (Not Implemented): Creating machine with cluster %v.", cluster.Name)
-	glog.Infof("TODO (Not Implemented): Creating machine %v.", machine.Name)
+func (lc *LinodeClient) validateMachine(machine *clusterv1.Machine, config *linodeconfigv1.LinodeMachineProviderConfig) *apierrors.MachineError {
+	if machine.Spec.Versions.Kubelet == "" {
+		return apierrors.InvalidMachineConfiguration("spec.versions.kubelet can't be empty")
+	}
 	return nil
+}
+
+func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
+	glog.Infof("Creating machine %v/%v", cluster.Name, machine.Name)
+	machineConfig, err := machineProviderConfig(machine.Spec.ProviderConfig)
+	if err != nil {
+		return lc.handleMachineError(machine, apierrors.InvalidMachineConfiguration(
+			"Cannot unmarshal machine's providerConfig field: %v", err), createEventAction)
+	}
+
+	if verr := lc.validateMachine(machine, machineConfig); verr != nil {
+		return lc.handleMachineError(machine, verr, createEventAction)
+	}
+
+	instance, err := lc.instanceIfExists(cluster, machine)
+	if err != nil {
+		return err
+	}
+
+	if instance == nil {
+		instance, err := lc.linodeClient.CreateInstance(context.Background(), linodego.InstanceCreateOptions{
+			Region: machineConfig.Region,
+			Type:   machineConfig.Type,
+			Label:  machineLabel(cluster, machine),
+			Image:  machineConfig.Image,
+			/* TODO: randomize RootPass, add AuthorizedKeys */
+			RootPass:  "IC2p1BUHNBac2pp2",
+			PrivateIP: true,
+			/* TODO: Choose StackScript based on Role */
+			/* TODO: Populate StackScript params from Machine config */
+		})
+		instanceCreationTimeoutSeconds := 600
+		if err == nil {
+			instance, err = lc.linodeClient.WaitForInstanceStatus(
+				context.Background(), instance.ID, linodego.InstanceRunning, instanceCreationTimeoutSeconds)
+		}
+
+		if err != nil {
+			return lc.handleMachineError(machine, apierrors.CreateMachine(
+				"error creating Linode instance: %v", err), createEventAction)
+		}
+
+		lc.eventRecorder.Eventf(machine, corev1.EventTypeNormal, "Created", "Created Machine %v", machine.Name)
+		/* TODO: Annotate Machine object with Linode ID */
+	} else {
+		glog.Infof("Skipped creating a VM that already exists.\n")
+	}
+	return nil
+}
+
+func isMaster(roles []linodeconfigv1.MachineRole) bool {
+	for _, r := range roles {
+		if r == linodeconfigv1.MasterRole {
+			return true
+		}
+	}
+	return false
+}
+
+func (lc *LinodeClient) handleMachineError(machine *clusterv1.Machine, err *apierrors.MachineError, eventAction string) error {
+	/* TODO: Update Machine.Status not implemented */
+	/*
+		if lc.client != nil {
+			reason := err.Reason
+			message := err.Message
+			machine.Status.ErrorReason = &reason
+			machine.Status.ErrorMessage = &message
+		}
+	*/
+
+	if eventAction != noEventAction {
+		lc.eventRecorder.Eventf(machine, corev1.EventTypeWarning, "Failed"+eventAction, "%v", err.Reason)
+	}
+
+	glog.Errorf("Machine error: %v", err.Message)
+	return err
 }
 
 func (lc *LinodeClient) Delete(cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
@@ -107,7 +195,7 @@ func (lc *LinodeClient) Exists(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 	return (instance != nil), err
 }
 
-func clusterProviderFromProviderConfig(providerConfig clusterv1.ProviderConfig) (*linodeconfigv1.LinodeClusterProviderConfig, error) {
+func clusterProviderConfig(providerConfig clusterv1.ProviderConfig) (*linodeconfigv1.LinodeClusterProviderConfig, error) {
 	var config linodeconfigv1.LinodeClusterProviderConfig
 	if err := yaml.Unmarshal(providerConfig.Value.Raw, &config); err != nil {
 		return nil, err
@@ -115,7 +203,11 @@ func clusterProviderFromProviderConfig(providerConfig clusterv1.ProviderConfig) 
 	return &config, nil
 }
 
-func machineProviderFromProviderConfig(providerConfig clusterv1.ProviderConfig) (*linodeconfigv1.LinodeMachineProviderConfig, error) {
+func machineLabel(cluster *clusterv1.Cluster, machine *clusterv1.Machine) string {
+	return fmt.Sprintf("%s-%s", cluster.ObjectMeta.Name, machine.ObjectMeta.Name)
+}
+
+func machineProviderConfig(providerConfig clusterv1.ProviderConfig) (*linodeconfigv1.LinodeMachineProviderConfig, error) {
 	var config linodeconfigv1.LinodeMachineProviderConfig
 	if err := yaml.Unmarshal(providerConfig.Value.Raw, &config); err != nil {
 		return nil, err
@@ -139,7 +231,7 @@ func (lc *LinodeClient) instanceIfExists(cluster *clusterv1.Cluster, machine *cl
 	}
 
 	// Get the VM via label: <cluster-name>-<machine-name>
-	label := fmt.Sprintf("%s-%s", cluster.ObjectMeta.Name, identifyingMachine.ObjectMeta.Name)
+	label := machineLabel(cluster, identifyingMachine)
 	instance, err := lc.getInstanceByLabel(label)
 	if err != nil {
 		return nil, err
