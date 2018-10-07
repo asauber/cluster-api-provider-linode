@@ -53,6 +53,14 @@
   revision = "7536572e8d55209135cd5e7ccf7fce43dca217ab"
 
 [[projects]]
+  digest = "1:5f092da462c58fd3c1b12632930ade2ec2539c71ba2f39c4ff423c205bb5ce37"
+  name = "github.com/go-resty/resty"
+  packages = ["."]
+  pruneopts = "T"
+  revision = "d4920dcf5b7689548a6db640278a9b35a5b48ec6"
+  version = "v1.9.1"
+
+[[projects]]
   digest = "1:011e8eca01fb5af3497e6f1b79d670bb6b8519b4b0c287b710f984b364aaafb8"
   name = "github.com/gobuffalo/envy"
   packages = ["."]
@@ -204,6 +212,14 @@
   pruneopts = "T"
   revision = "1624edc4454b8682399def8740d46db5e4362ba4"
   version = "v1.1.5"
+
+[[projects]]
+  digest = "1:c5363063ead7933de35c95fc1b8594284d85425d628ff8f9163c62e469d36d56"
+  name = "github.com/linode/linodego"
+  packages = ["."]
+  pruneopts = "T"
+  revision = "d0d31d8ca62fa3f7e4526ca0ce95de81e4ed001e"
+  version = "v0.5.1"
 
 [[projects]]
   digest = "1:50656f57259a3c6087d0e8c572d5845e3dee42c77209dd5409b6ab8595f0295e"
@@ -399,6 +415,7 @@
     "http2",
     "http2/hpack",
     "idna",
+    "publicsuffix",
   ]
   pruneopts = "T"
   revision = "f5e5bdd778241bfefa8627f7124c39cd6ad8d74f"
@@ -580,6 +597,9 @@
   packages = [
     "pkg/apis/apiextensions",
     "pkg/apis/apiextensions/v1beta1",
+    "pkg/client/clientset/clientset",
+    "pkg/client/clientset/clientset/scheme",
+    "pkg/client/clientset/clientset/typed/apiextensions/v1beta1",
   ]
   pruneopts = "T"
   revision = "408db4a50408e2149acbd657bceb2480c13cb0a4"
@@ -595,6 +615,7 @@
     "pkg/apis/meta/internalversion",
     "pkg/apis/meta/v1",
     "pkg/apis/meta/v1/unstructured",
+    "pkg/apis/meta/v1/validation",
     "pkg/apis/meta/v1beta1",
     "pkg/conversion",
     "pkg/conversion/queryparams",
@@ -747,6 +768,22 @@
   revision = "9dfdf9be683f61f82cda12362c44c784e0778b56"
 
 [[projects]]
+  branch = "master"
+  digest = "1:a7af85724c3e50b692509ee1cf9f1cab472371fee649920b1878092a4a068138"
+  name = "sigs.k8s.io/cluster-api"
+  packages = [
+    "pkg/apis",
+    "pkg/apis/cluster/common",
+    "pkg/apis/cluster/v1alpha1",
+    "pkg/controller/cluster",
+    "pkg/controller/error",
+    "pkg/controller/machine",
+    "pkg/util",
+  ]
+  pruneopts = "T"
+  revision = "340f236eda654676d92439718417b72725cb3b29"
+
+[[projects]]
   digest = "1:4c3be496e0e0977b54e265fea184b57e9928fed12a1a14687c04b5d42e044abc"
   name = "sigs.k8s.io/controller-runtime"
   packages = [
@@ -756,6 +793,8 @@
     "pkg/client/apiutil",
     "pkg/client/config",
     "pkg/controller",
+    "pkg/envtest",
+    "pkg/envtest/printer",
     "pkg/event",
     "pkg/handler",
     "pkg/internal/controller",
@@ -768,6 +807,7 @@
     "pkg/recorder",
     "pkg/runtime/inject",
     "pkg/runtime/log",
+    "pkg/runtime/scheme",
     "pkg/runtime/signals",
     "pkg/source",
     "pkg/source/internal",
@@ -811,16 +851,32 @@
   analyzer-version = 1
   input-imports = [
     "github.com/emicklei/go-restful",
+    "github.com/golang/glog",
+    "github.com/linode/linodego",
     "github.com/onsi/ginkgo",
     "github.com/onsi/gomega",
+    "golang.org/x/net/context",
     "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1",
+    "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/apimachinery/pkg/runtime",
+    "k8s.io/apimachinery/pkg/runtime/schema",
+    "k8s.io/apimachinery/pkg/types",
+    "k8s.io/client-go/kubernetes/scheme",
     "k8s.io/client-go/plugin/pkg/client/auth/gcp",
+    "k8s.io/client-go/rest",
     "k8s.io/code-generator/cmd/deepcopy-gen",
+    "sigs.k8s.io/cluster-api/pkg/apis",
+    "sigs.k8s.io/cluster-api/pkg/apis/cluster/common",
+    "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1",
+    "sigs.k8s.io/cluster-api/pkg/controller/cluster",
+    "sigs.k8s.io/cluster-api/pkg/controller/machine",
+    "sigs.k8s.io/controller-runtime/pkg/client",
     "sigs.k8s.io/controller-runtime/pkg/client/config",
     "sigs.k8s.io/controller-runtime/pkg/controller",
+    "sigs.k8s.io/controller-runtime/pkg/envtest",
     "sigs.k8s.io/controller-runtime/pkg/handler",
     "sigs.k8s.io/controller-runtime/pkg/manager",
+    "sigs.k8s.io/controller-runtime/pkg/runtime/scheme",
     "sigs.k8s.io/controller-runtime/pkg/runtime/signals",
     "sigs.k8s.io/controller-runtime/pkg/source",
     "sigs.k8s.io/controller-tools/cmd/controller-gen",
