@@ -34,6 +34,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	apierrors "sigs.k8s.io/cluster-api/pkg/errors"
+	"sigs.k8s.io/cluster-api/pkg/kubeadm"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
@@ -53,6 +54,7 @@ type LinodeClient struct {
 	linodeClient  *linodego.Client
 	scheme        *runtime.Scheme
 	eventRecorder record.EventRecorder
+	kubeadm       *kubeadm.Kubeadm
 }
 
 type MachineActuatorParams struct {
@@ -66,10 +68,12 @@ func NewMachineActuator(m manager.Manager, params MachineActuatorParams) (*Linod
 		linodeClient:  newLinodeAPIClient(),
 		scheme:        params.Scheme,
 		eventRecorder: params.EventRecorder,
+		kubeadm:       kubeadm.New(),
 	}, nil
 }
 
 func newLinodeAPIClient() *linodego.Client {
+	// Add this token to the env of the StatefulSet using a secret
 	apiKey, ok := os.LookupEnv("LINODE_API_TOKEN")
 	/*
 	 * TODO: Make Linode API dynamic per cluster, by associating a secret name with
@@ -98,6 +102,20 @@ func (lc *LinodeClient) validateMachine(machine *clusterv1.Machine, config *lino
 	return nil
 }
 
+func (lc *LinodeClient) getKubeadmToken() (string, error) {
+	// TODO: Very High Priority! Annotate Cluster with a secret name for the token created here
+	/*
+		token, err := bootstraputil.GenerateBootstrapToken()
+		if err != nil {
+			glog.Errorf("Unable to create kubeadm token: %v", err)
+			return "", err
+		}
+		return strings.TrimSpace(token), nil
+	*/
+	// Temporary static token for cluster init debugging
+	return "ur7tri.u1y6ooiwy9yf1two", nil
+}
+
 func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
 	glog.Infof("Creating machine %v/%v", cluster.Name, machine.Name)
 	machineConfig, err := machineProviderConfig(machine.Spec.ProviderConfig)
@@ -116,16 +134,41 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 	}
 
 	if instance == nil {
+		label := lc.MachineLabel(cluster, machine)
+
+		/* Create or update StackScript for machine init */
+		token, err := lc.getKubeadmToken()
+		if err != nil {
+			return err
+		}
+		script, err := lc.getInitScript(token, cluster, machine, machineConfig)
+		if err != nil {
+			return err
+		}
+
+		/* TODO: Very High Priority! Do not write out a StackScript per machine. Use UDFs instead */
+		createOpts := linodego.StackscriptCreateOptions{
+			Label:    label,
+			Script:   script,
+			IsPublic: false,
+		}
+
+		createOpts.Images = append(createOpts.Images, machineConfig.Image)
+
+		stackscript, err := lc.linodeClient.CreateStackscript(context.Background(), createOpts)
+		if err != nil {
+			return fmt.Errorf("Error creating a Linode Stackscript: %s", err)
+		}
+
 		instance, err := lc.linodeClient.CreateInstance(context.Background(), linodego.InstanceCreateOptions{
 			Region: machineConfig.Region,
 			Type:   machineConfig.Type,
-			Label:  machineLabel(cluster, machine),
+			Label:  lc.MachineLabel(cluster, machine),
 			Image:  machineConfig.Image,
 			/* TODO: randomize RootPass, add AuthorizedKeys */
-			RootPass:  "IC2p1BUHNBac2pp2",
-			PrivateIP: true,
-			/* TODO: Choose StackScript based on Role */
-			/* TODO: Populate StackScript params from Machine config */
+			RootPass:      "IC2p1BUHNBac2pp2",
+			PrivateIP:     true,
+			StackScriptID: stackscript.ID,
 		})
 		instanceCreationTimeoutSeconds := 600
 		if err == nil {
@@ -138,6 +181,10 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 				"error creating Linode instance: %v", err), createEventAction)
 		}
 
+		if isMaster(machineConfig.Roles) {
+			lc.updateClusterEndpoint(cluster, instance)
+		}
+
 		lc.eventRecorder.Eventf(machine, corev1.EventTypeNormal, "Created", "Created Machine %v", machine.Name)
 		/* TODO: Annotate Machine object with Linode ID */
 	} else {
@@ -146,13 +193,16 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 	return nil
 }
 
-func isMaster(roles []linodeconfigv1.MachineRole) bool {
-	for _, r := range roles {
-		if r == linodeconfigv1.MasterRole {
-			return true
-		}
-	}
-	return false
+/* TODO: Move this to cluster controller */
+func (lc *LinodeClient) updateClusterEndpoint(cluster *clusterv1.Cluster, instance *linodego.Instance) error {
+	glog.Infof("Updating cluster endpoint %v.\n", instance.IPv4[0].String())
+	cluster.Status.APIEndpoints = append(cluster.Status.APIEndpoints,
+		clusterv1.APIEndpoint{
+			Host: instance.IPv4[0].String(),
+			Port: 6443,
+		})
+	err := lc.client.Update(context.Background(), cluster)
+	return err
 }
 
 func (lc *LinodeClient) handleMachineError(machine *clusterv1.Machine, err *apierrors.MachineError, eventAction string) error {
@@ -203,7 +253,7 @@ func clusterProviderConfig(providerConfig clusterv1.ProviderConfig) (*linodeconf
 	return &config, nil
 }
 
-func machineLabel(cluster *clusterv1.Cluster, machine *clusterv1.Machine) string {
+func (lc *LinodeClient) MachineLabel(cluster *clusterv1.Cluster, machine *clusterv1.Machine) string {
 	return fmt.Sprintf("%s-%s", cluster.ObjectMeta.Name, machine.ObjectMeta.Name)
 }
 
@@ -231,7 +281,7 @@ func (lc *LinodeClient) instanceIfExists(cluster *clusterv1.Cluster, machine *cl
 	}
 
 	// Get the VM via label: <cluster-name>-<machine-name>
-	label := machineLabel(cluster, identifyingMachine)
+	label := lc.MachineLabel(cluster, identifyingMachine)
 	instance, err := lc.getInstanceByLabel(label)
 	if err != nil {
 		return nil, err
