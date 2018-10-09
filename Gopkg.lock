@@ -733,6 +733,17 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:da6051b29515d21d8e400ab5b08e852d747a2a071a8b075b7193c6c469d583e2"
+  name = "k8s.io/cluster-bootstrap"
+  packages = [
+    "token/api",
+    "token/util",
+  ]
+  pruneopts = "T"
+  revision = "345cb50e92869ee605a0d9b20f92ebe419a529e2"
+
+[[projects]]
+  branch = "master"
   digest = "1:e7e1149940784e0b902191de4b579379d1ddf462738575832a6e9e492ed59b0f"
   name = "k8s.io/code-generator"
   packages = [
@@ -775,9 +786,12 @@
     "pkg/apis",
     "pkg/apis/cluster/common",
     "pkg/apis/cluster/v1alpha1",
+    "pkg/cmd-runner",
     "pkg/controller/cluster",
     "pkg/controller/error",
     "pkg/controller/machine",
+    "pkg/errors",
+    "pkg/kubeadm",
     "pkg/util",
   ]
   pruneopts = "T"
@@ -856,20 +870,29 @@
     "github.com/onsi/ginkgo",
     "github.com/onsi/gomega",
     "golang.org/x/net/context",
+    "golang.org/x/oauth2",
+    "gopkg.in/yaml.v2",
+    "k8s.io/api/core/v1",
     "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/apimachinery/pkg/runtime",
     "k8s.io/apimachinery/pkg/runtime/schema",
+    "k8s.io/apimachinery/pkg/runtime/serializer/json",
     "k8s.io/apimachinery/pkg/types",
     "k8s.io/client-go/kubernetes/scheme",
     "k8s.io/client-go/plugin/pkg/client/auth/gcp",
     "k8s.io/client-go/rest",
+    "k8s.io/client-go/tools/record",
+    "k8s.io/cluster-bootstrap/token/util",
     "k8s.io/code-generator/cmd/deepcopy-gen",
     "sigs.k8s.io/cluster-api/pkg/apis",
     "sigs.k8s.io/cluster-api/pkg/apis/cluster/common",
     "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1",
     "sigs.k8s.io/cluster-api/pkg/controller/cluster",
     "sigs.k8s.io/cluster-api/pkg/controller/machine",
+    "sigs.k8s.io/cluster-api/pkg/errors",
+    "sigs.k8s.io/cluster-api/pkg/kubeadm",
+    "sigs.k8s.io/cluster-api/pkg/util",
     "sigs.k8s.io/controller-runtime/pkg/client",
     "sigs.k8s.io/controller-runtime/pkg/client/config",
     "sigs.k8s.io/controller-runtime/pkg/controller",
