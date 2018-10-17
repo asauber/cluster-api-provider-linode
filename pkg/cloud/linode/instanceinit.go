@@ -229,7 +229,7 @@ apiServerCertSANs:
 - 127.0.0.1
 EOF
 
-# TODO: Modify kubelet configuration for custom service domain
+# TODO: Generate kubelet configuration for custom service domain
 
 function install_custom_ca () {
 	if [ ! -n "$MASTER_CA_CERTIFICATE" ]; then

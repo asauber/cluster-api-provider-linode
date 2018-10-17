@@ -30,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	bootstraputil "k8s.io/client-go/tools/bootstrap/token/util"
 	"k8s.io/client-go/tools/record"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	apierrors "sigs.k8s.io/cluster-api/pkg/errors"
@@ -46,7 +47,7 @@ const (
 	createEventAction        = "Create"
 	deleteEventAction        = "Delete"
 	noEventAction            = ""
-	linodeAPITokenSecretName = "linodeAPIToken"
+	linodeAPITokenSecretName = "linode-api-token"
 )
 
 type LinodeClient struct {
@@ -70,11 +71,11 @@ func NewMachineActuator(m manager.Manager, params MachineActuatorParams) (*Linod
 	}, nil
 }
 
-func getLinodeAPIClient(client client.Client, cluster clusterv1.Cluster) (*linodego.Client, error) {
+func getLinodeAPIClient(client client.Client, cluster *clusterv1.Cluster) (*linodego.Client, error) {
 	/*
-	 * We generate a new client every time that we make a Linode API call so that
+	 * We construct a new client every time that we make a Linode API call so that
 	 * the API Token Secret can be rotated at any time. We need a Cluster object
-	 * so that we can associate different API tokens with each Cluster.
+	 * so that we can associate a different API token with each Cluster.
 	 */
 	apiTokenSecret := &corev1.Secret{}
 	namespace := cluster.GetNamespace()
@@ -148,25 +149,35 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 
 		createOpts.Images = append(createOpts.Images, machineConfig.Image)
 
-		linodeClient := getLinodeAPIClient(cluster)
+		linodeClient, err := getLinodeAPIClient(lc.client, cluster)
+		if err != nil {
+			return fmt.Errorf("Error initializing Linode API client: %v", err)
+		}
 
 		stackscript, err := linodeClient.CreateStackscript(context.Background(), createOpts)
 		if err != nil {
-			return fmt.Errorf("Error creating a Linode Stackscript: %s", err)
+			return fmt.Errorf("Error creating a Linode Stackscript: %v", err)
 		}
 
-		/* Get the public keys for this cluster by querying for a secret in this namespace */
+		/*
+		 * Use a bootstrap token as a random root password. Replace this if upstream
+		 * changes. Don't store this - the idea is that no one ever knows the root password.
+		 */
+		rootPass, err := bootstraputil.GenerateBootstrapToken()
+		if err != nil {
+			return fmt.Errorf("Couldn't generate random root password: %v", err)
+		}
+
+		/* TODO: Use the Cluster spec for reading a list of public AuthorizedKeys */
 
 		instance, err := linodeClient.CreateInstance(context.Background(), linodego.InstanceCreateOptions{
-			Region: machineConfig.Region,
-			Type:   machineConfig.Type,
-			Label:  lc.MachineLabel(cluster, machine),
-			Image:  machineConfig.Image,
-			/* TODO: randomize RootPass */
-			RootPass:      "IC2p1BUHNBac2pp2",
-			PrivateIP:     true,
-			StackScriptID: stackscript.ID,
-			/* TODO: use a secret for AuthorizedKeys */
+			Region:         machineConfig.Region,
+			Type:           machineConfig.Type,
+			Label:          lc.MachineLabel(cluster, machine),
+			Image:          machineConfig.Image,
+			RootPass:       rootPass,
+			PrivateIP:      true,
+			StackScriptID:  stackscript.ID,
 			AuthorizedKeys: []string{"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCagK9ZjexjQrxmCvQpPm4Da7qM9tQ/ldqAHqbORTqkZbAMMm8ASkBYFP8de4+y+K/BxV2iNDo/A/0Jkaw7uJSrH645vWzCbeX2S+hQMaQp2C7HE4aua8pwjL5d1q/YnU/tiznq2Lf74BTp4/mrl4pcmOTZdlUOa/tTN0ZZlZas0+KW9dr9cn4X78HT6n7vN0TOuQQMWTsw1aFxgdNMUDf6as7Z+RzILdG5J7G7QjFBbRzcj/yaRZGpmpaPvP+KV9J+8KsnjvoMNJuvBYQapWqZqv1yUqN45J2UQ9vvJ7H/p2u8+lYvGZ0wVbRB7PTHnsR8bOSW1f0BPoMDWkW+9ZCN user@host"},
 		})
 		instanceCreationTimeoutSeconds := 600
@@ -203,7 +214,7 @@ func (lc *LinodeClient) updateClusterEndpoint(cluster *clusterv1.Cluster, instan
 }
 
 func (lc *LinodeClient) handleMachineError(machine *clusterv1.Machine, err *apierrors.MachineError, eventAction string) error {
-	/* TODO: Update Machine.Status not implemented */
+	/* TODO: implement machine.Status update on error */
 	/*
 		if lc.client != nil {
 			reason := err.Reason
@@ -277,9 +288,12 @@ func (lc *LinodeClient) instanceIfExists(cluster *clusterv1.Cluster, machine *cl
 		identifyingMachine = (*clusterv1.Machine)(status)
 	}
 
-	// Get the VM via label: <cluster-name>-<machine-name>
+	// Get the VM via Linode label: <cluster-name>-<machine-name>
 	label := lc.MachineLabel(cluster, identifyingMachine)
-	linodeClient := getLinodeAPIClient(cluster)
+	linodeClient, err := getLinodeAPIClient(lc.client, cluster)
+	if err != nil {
+		return nil, fmt.Errorf("Error initializing Linode API client: %v", err)
+	}
 	instance, err := getInstanceByLabel(linodeClient, label)
 	if err != nil {
 		return nil, err
