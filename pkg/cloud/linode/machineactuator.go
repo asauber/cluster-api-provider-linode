@@ -19,9 +19,7 @@ package linode
 
 import (
 	"fmt"
-	"log"
 	"net/http"
-	"os"
 
 	linodeconfigv1 "github.com/displague/cluster-api-provider-linode/pkg/apis/linodeproviderconfig/v1alpha1"
 	"github.com/golang/glog"
@@ -31,6 +29,7 @@ import (
 	yaml "gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	apierrors "sigs.k8s.io/cluster-api/pkg/errors"
@@ -44,14 +43,14 @@ const (
 )
 
 const (
-	createEventAction = "Create"
-	deleteEventAction = "Delete"
-	noEventAction     = ""
+	createEventAction        = "Create"
+	deleteEventAction        = "Delete"
+	noEventAction            = ""
+	linodeAPITokenSecretName = "linodeAPIToken"
 )
 
 type LinodeClient struct {
 	client        client.Client
-	linodeClient  *linodego.Client
 	scheme        *runtime.Scheme
 	eventRecorder record.EventRecorder
 	kubeadm       *kubeadm.Kubeadm
@@ -65,33 +64,41 @@ type MachineActuatorParams struct {
 func NewMachineActuator(m manager.Manager, params MachineActuatorParams) (*LinodeClient, error) {
 	return &LinodeClient{
 		client:        m.GetClient(),
-		linodeClient:  newLinodeAPIClient(),
 		scheme:        params.Scheme,
 		eventRecorder: params.EventRecorder,
 		kubeadm:       kubeadm.New(),
 	}, nil
 }
 
-func newLinodeAPIClient() *linodego.Client {
+func getLinodeAPIClient(client client.Client, cluster clusterv1.Cluster) (*linodego.Client, error) {
 	/*
-	 * TODO: Make Linode API dynamic per cluster, by associating a secret name with
-	 * the Cluster Object, then constructing a new Linode client during each Resource
-	 * lifecycle hook. (using the API token from that Cluster's secret)
+	 * We generate a new client every time that we make a Linode API call so that
+	 * the API Token Secret can be rotated at any time. We need a Cluster object
+	 * so that we can associate different API tokens with each Cluster.
 	 */
-	apiKey, ok := os.LookupEnv("LINODE_API_TOKEN")
-	if !ok {
-		log.Fatal("Could not find LINODE_API_TOKEN")
-	}
-	tokenSource := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: apiKey})
+	apiTokenSecret := &corev1.Secret{}
+	namespace := cluster.GetNamespace()
+	err := client.Get(context.Background(),
+		types.NamespacedName{Namespace: namespace, Name: linodeAPITokenSecretName},
+		apiTokenSecret)
 
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving Linode API token secret for cluster %v", err)
+	}
+
+	apiKey, ok := apiTokenSecret.Data["token"]
+	if !ok {
+		return nil, fmt.Errorf("Linode API token secret for namespace %s is missing 'token' data", namespace)
+	}
+
+	tokenSource := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: string(apiKey)})
 	oauth2Client := &http.Client{
 		Transport: &oauth2.Transport{
 			Source: tokenSource,
 		},
 	}
-
 	linodeClient := linodego.NewClient(oauth2Client)
-	return &linodeClient
+	return &linodeClient, nil
 }
 
 func (lc *LinodeClient) validateMachine(machine *clusterv1.Machine, config *linodeconfigv1.LinodeMachineProviderConfig) *apierrors.MachineError {
@@ -141,14 +148,16 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 
 		createOpts.Images = append(createOpts.Images, machineConfig.Image)
 
-		stackscript, err := lc.linodeClient.CreateStackscript(context.Background(), createOpts)
+		linodeClient := getLinodeAPIClient(cluster)
+
+		stackscript, err := linodeClient.CreateStackscript(context.Background(), createOpts)
 		if err != nil {
 			return fmt.Errorf("Error creating a Linode Stackscript: %s", err)
 		}
 
 		/* Get the public keys for this cluster by querying for a secret in this namespace */
 
-		instance, err := lc.linodeClient.CreateInstance(context.Background(), linodego.InstanceCreateOptions{
+		instance, err := linodeClient.CreateInstance(context.Background(), linodego.InstanceCreateOptions{
 			Region: machineConfig.Region,
 			Type:   machineConfig.Type,
 			Label:  lc.MachineLabel(cluster, machine),
@@ -162,7 +171,7 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 		})
 		instanceCreationTimeoutSeconds := 600
 		if err == nil {
-			instance, err = lc.linodeClient.WaitForInstanceStatus(
+			instance, err = linodeClient.WaitForInstanceStatus(
 				context.Background(), instance.ID, linodego.InstanceRunning, instanceCreationTimeoutSeconds)
 		}
 
@@ -183,7 +192,6 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 	return nil
 }
 
-/* TODO: Move this to cluster controller */
 func (lc *LinodeClient) updateClusterEndpoint(cluster *clusterv1.Cluster, instance *linodego.Instance) error {
 	glog.Infof("Updating cluster endpoint %v.\n", instance.IPv4[0].String())
 	cluster.Status.APIEndpoints = []clusterv1.APIEndpoint{{
@@ -271,7 +279,8 @@ func (lc *LinodeClient) instanceIfExists(cluster *clusterv1.Cluster, machine *cl
 
 	// Get the VM via label: <cluster-name>-<machine-name>
 	label := lc.MachineLabel(cluster, identifyingMachine)
-	instance, err := lc.getInstanceByLabel(label)
+	linodeClient := getLinodeAPIClient(cluster)
+	instance, err := getInstanceByLabel(linodeClient, label)
 	if err != nil {
 		return nil, err
 	}
@@ -279,9 +288,9 @@ func (lc *LinodeClient) instanceIfExists(cluster *clusterv1.Cluster, machine *cl
 	return instance, nil
 }
 
-func (lc *LinodeClient) getInstanceByLabel(label string) (*linodego.Instance, error) {
+func getInstanceByLabel(linodeClient *linodego.Client, label string) (*linodego.Instance, error) {
 	filter := fmt.Sprintf("{ \"label\": \"%s\" }", label)
-	instances, err := lc.linodeClient.ListInstances(context.Background(), &linodego.ListOptions{
+	instances, err := linodeClient.ListInstances(context.Background(), &linodego.ListOptions{
 		Filter: filter,
 	})
 	if err != nil {

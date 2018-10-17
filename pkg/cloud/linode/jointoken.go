@@ -22,7 +22,7 @@ import (
 
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
-	k8sv1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -37,7 +37,7 @@ const (
 
 func getOrCreateJoinToken(client client.Client, cluster *clusterv1.Cluster) (string, error) {
 	// Look for a join token secret in the namespace of the Cluster object.
-	joinTokenSecret := &k8sv1.Secret{}
+	joinTokenSecret := &corev1.Secret{}
 	err := client.Get(context.Background(),
 		types.NamespacedName{Namespace: cluster.GetNamespace(), Name: joinTokenSecretName},
 		joinTokenSecret)
@@ -59,7 +59,7 @@ func getOrCreateJoinToken(client client.Client, cluster *clusterv1.Cluster) (str
 			Namespace: cluster.GetNamespace(),
 			Name:      joinTokenSecretName,
 		}
-		joinTokenSecret.Type = k8sv1.SecretTypeOpaque
+		joinTokenSecret.Type = corev1.SecretTypeOpaque
 		joinTokenSecret.Data = map[string][]byte{
 			"token": []byte(joinToken),
 		}
