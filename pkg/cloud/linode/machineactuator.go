@@ -73,13 +73,12 @@ func NewMachineActuator(m manager.Manager, params MachineActuatorParams) (*Linod
 }
 
 func newLinodeAPIClient() *linodego.Client {
-	// Add this token to the env of the StatefulSet using a secret
-	apiKey, ok := os.LookupEnv("LINODE_API_TOKEN")
 	/*
 	 * TODO: Make Linode API dynamic per cluster, by associating a secret name with
 	 * the Cluster Object, then constructing a new Linode client during each Resource
 	 * lifecycle hook. (using the API token from that Cluster's secret)
 	 */
+	apiKey, ok := os.LookupEnv("LINODE_API_TOKEN")
 	if !ok {
 		log.Fatal("Could not find LINODE_API_TOKEN")
 	}
@@ -100,20 +99,6 @@ func (lc *LinodeClient) validateMachine(machine *clusterv1.Machine, config *lino
 		return apierrors.InvalidMachineConfiguration("spec.versions.kubelet can't be empty")
 	}
 	return nil
-}
-
-func (lc *LinodeClient) getKubeadmToken() (string, error) {
-	// TODO: Very High Priority! Annotate Cluster with a secret name for the token created here
-	/*
-		token, err := bootstraputil.GenerateBootstrapToken()
-		if err != nil {
-			glog.Errorf("Unable to create kubeadm token: %v", err)
-			return "", err
-		}
-		return strings.TrimSpace(token), nil
-	*/
-	// Temporary static token for cluster init debugging
-	return "ur7tri.u1y6ooiwy9yf1two", nil
 }
 
 func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
@@ -137,10 +122,11 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 		label := lc.MachineLabel(cluster, machine)
 
 		/* Create or update StackScript for machine init */
-		token, err := lc.getKubeadmToken()
+		token, err := getOrCreateJoinToken(lc.client, cluster)
 		if err != nil {
 			return err
 		}
+
 		script, err := lc.getInitScript(token, cluster, machine, machineConfig)
 		if err != nil {
 			return err
@@ -160,15 +146,19 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 			return fmt.Errorf("Error creating a Linode Stackscript: %s", err)
 		}
 
+		/* Get the public keys for this cluster by querying for a secret in this namespace */
+
 		instance, err := lc.linodeClient.CreateInstance(context.Background(), linodego.InstanceCreateOptions{
 			Region: machineConfig.Region,
 			Type:   machineConfig.Type,
 			Label:  lc.MachineLabel(cluster, machine),
 			Image:  machineConfig.Image,
-			/* TODO: randomize RootPass, add AuthorizedKeys */
+			/* TODO: randomize RootPass */
 			RootPass:      "IC2p1BUHNBac2pp2",
 			PrivateIP:     true,
 			StackScriptID: stackscript.ID,
+			/* TODO: use a secret for AuthorizedKeys */
+			AuthorizedKeys: []string{"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCagK9ZjexjQrxmCvQpPm4Da7qM9tQ/ldqAHqbORTqkZbAMMm8ASkBYFP8de4+y+K/BxV2iNDo/A/0Jkaw7uJSrH645vWzCbeX2S+hQMaQp2C7HE4aua8pwjL5d1q/YnU/tiznq2Lf74BTp4/mrl4pcmOTZdlUOa/tTN0ZZlZas0+KW9dr9cn4X78HT6n7vN0TOuQQMWTsw1aFxgdNMUDf6as7Z+RzILdG5J7G7QjFBbRzcj/yaRZGpmpaPvP+KV9J+8KsnjvoMNJuvBYQapWqZqv1yUqN45J2UQ9vvJ7H/p2u8+lYvGZ0wVbRB7PTHnsR8bOSW1f0BPoMDWkW+9ZCN user@host"},
 		})
 		instanceCreationTimeoutSeconds := 600
 		if err == nil {
@@ -196,11 +186,10 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 /* TODO: Move this to cluster controller */
 func (lc *LinodeClient) updateClusterEndpoint(cluster *clusterv1.Cluster, instance *linodego.Instance) error {
 	glog.Infof("Updating cluster endpoint %v.\n", instance.IPv4[0].String())
-	cluster.Status.APIEndpoints = append(cluster.Status.APIEndpoints,
-		clusterv1.APIEndpoint{
-			Host: instance.IPv4[0].String(),
-			Port: 6443,
-		})
+	cluster.Status.APIEndpoints = []clusterv1.APIEndpoint{{
+		Host: instance.IPv4[0].String(),
+		Port: 6443,
+	}}
 	err := lc.client.Update(context.Background(), cluster)
 	return err
 }
