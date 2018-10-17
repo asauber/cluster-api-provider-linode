@@ -254,6 +254,8 @@ install_custom_ca
 
 kubeadm init --config /etc/kubernetes/kubeadm_config.yaml
 
+mkdir -p $HOME/.kube && cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+
 # Annotate node.
 for tries in $(seq 1 60); do
 	kubectl --kubeconfig /etc/kubernetes/kubelet.conf annotate --overwrite node ${HOSTNAME} machine=${MACHINE} && break
