@@ -18,27 +18,28 @@ limitations under the License.
 package linode
 
 import (
-	"bytes"
 	"fmt"
-	"text/template"
 	"time"
 
 	linodeconfigv1 "github.com/displague/cluster-api-provider-linode/pkg/apis/linodeproviderconfig/v1alpha1"
 	"github.com/golang/glog"
+	"github.com/linode/linodego"
 	"golang.org/x/net/context"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
-func isMaster(roles []linodeconfigv1.MachineRole) bool {
-	glog.Infof("roles %v", roles)
-	for _, r := range roles {
-		if r == linodeconfigv1.MasterRole {
-			return true
-		}
-	}
-	return false
+/* If there are ever roles other than master and node then this file will have to be refactored */
+const (
+	masterStackScriptLabel = "k8s-master-ubuntu18.04"
+	nodeStackScriptLabel   = "k8s-node-ubuntu18.04"
+)
+
+/* If we move to another init method this type will change, perhaps back to string */
+type initScript struct {
+	stackScript     linodego.Stackscript
+	stackScriptData map[string]string
 }
 
 type initScriptParams struct {
@@ -53,6 +54,16 @@ type initScriptParams struct {
 	MasterEndpoint string
 }
 
+func isMaster(roles []linodeconfigv1.MachineRole) bool {
+	glog.Infof("roles %v", roles)
+	for _, r := range roles {
+		if r == linodeconfigv1.MasterRole {
+			return true
+		}
+	}
+	return false
+}
+
 /*
  * TODO: Render different shell scripts for each combination of
  *	{ Machine State, Operating System Image, Roles }
@@ -63,42 +74,96 @@ type initScriptParams struct {
  * to be used with RequeueAfterError.
  */
 
-func (lc *LinodeClient) getInitScript(token string, cluster *clusterv1.Cluster, machine *clusterv1.Machine, config *linodeconfigv1.LinodeMachineProviderConfig) (string, error) {
-	if isMaster(config.Roles) {
-		params := initScriptParams{
-			Token:        token,
-			Cluster:      cluster,
-			Machine:      machine,
-			MachineLabel: lc.MachineLabel(cluster, machine),
-			PodCIDR:      cluster.Spec.ClusterNetwork.Pods.CIDRBlocks[0],
-			ServiceCIDR:  cluster.Spec.ClusterNetwork.Services.CIDRBlocks[0],
-		}
+func (lc *LinodeClient) getInitScript(token string, cluster *clusterv1.Cluster, machine *clusterv1.Machine, config *linodeconfigv1.LinodeMachineProviderConfig) (*initScript, error) {
+	initScript := &initScript{}
 
-		var buf bytes.Buffer
-		if err := masterInitScriptTempl.Execute(&buf, params); err != nil {
-			return "", err
+	stackscript, err := lc.getInitStackScript(cluster, config)
+	if err != nil {
+		return nil, err
+	}
+	initScript.stackScript = *stackscript
+
+	if isMaster(config.Roles) {
+		initScript.stackScriptData = map[string]string{
+			"token":          token,
+			"k8sversion":     machine.Spec.Versions.Kubelet,
+			"hostname":       lc.MachineLabel(cluster, machine),
+			"namespace":      machine.ObjectMeta.Namespace,
+			"machinename":    machine.ObjectMeta.Name,
+			"service_domain": cluster.Spec.ClusterNetwork.ServiceDomain,
+			"pod_cidr":       cluster.Spec.ClusterNetwork.Pods.CIDRBlocks[0],
+			"service_cidr":   cluster.Spec.ClusterNetwork.Services.CIDRBlocks[0],
 		}
-		return buf.String(), nil
 	} else {
 		latestCluster, err := lc.waitForClusterEndpoint(cluster)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-
-		params := initScriptParams{
-			Token:          token,
-			Cluster:        latestCluster,
-			Machine:        machine,
-			MachineLabel:   lc.MachineLabel(latestCluster, machine),
-			MasterEndpoint: endpoint(latestCluster.Status.APIEndpoints[0]),
+		initScript.stackScriptData = map[string]string{
+			"token":          token,
+			"k8sversion":     machine.Spec.Versions.Kubelet,
+			"hostname":       lc.MachineLabel(cluster, machine),
+			"namespace":      machine.ObjectMeta.Namespace,
+			"machinename":    machine.ObjectMeta.Name,
+			"service_domain": cluster.Spec.ClusterNetwork.ServiceDomain,
+			"endpoint":       endpoint(latestCluster.Status.APIEndpoints[0]),
 		}
-
-		var buf bytes.Buffer
-		if err := nodeInitScriptTempl.Execute(&buf, params); err != nil {
-			return "", err
-		}
-		return buf.String(), nil
 	}
+
+	return initScript, nil
+}
+
+func (lc *LinodeClient) getInitStackScript(cluster *clusterv1.Cluster, config *linodeconfigv1.LinodeMachineProviderConfig) (*linodego.Stackscript, error) {
+	linodeClient, err := getLinodeAPIClient(lc.client, cluster)
+	if err != nil {
+		return nil, fmt.Errorf("Error initializing Linode API client: %v", err)
+	}
+
+	var stackScriptLabel, script string
+	if isMaster(config.Roles) {
+		stackScriptLabel = masterStackScriptLabel
+		script = masterInitScript
+	} else {
+		stackScriptLabel = nodeStackScriptLabel
+		script = nodeInitScript
+	}
+
+	stackscript, err := getStackScriptByLabel(linodeClient, stackScriptLabel)
+	if err != nil {
+		return nil, fmt.Errorf("Error listing Stackscripts: %v", err)
+	}
+
+	if stackscript != nil {
+		return stackscript, nil
+	}
+
+	/* Stackscript doesn't exist, so create it */
+	createOpts := linodego.StackscriptCreateOptions{
+		Label:    stackScriptLabel,
+		Script:   script,
+		IsPublic: false,
+	}
+	createOpts.Images = append(createOpts.Images, config.Image)
+
+	stackscript, err = linodeClient.CreateStackscript(context.Background(), createOpts)
+	if err != nil {
+		return nil, fmt.Errorf("Error creating a Linode Stackscript: %v", err)
+	}
+	return stackscript, nil
+}
+
+func getStackScriptByLabel(linodeClient *linodego.Client, label string) (*linodego.Stackscript, error) {
+	filter := fmt.Sprintf("{ \"is_public\": false, \"label\": \"%s\" }", label)
+	stackscripts, err := linodeClient.ListStackscripts(context.Background(), &linodego.ListOptions{
+		Filter: filter,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(stackscripts) < 1 {
+		return nil, nil
+	}
+	return &stackscripts[0], nil
 }
 
 func (lc *LinodeClient) waitForClusterEndpoint(cluster *clusterv1.Cluster) (*clusterv1.Cluster, error) {
@@ -126,32 +191,23 @@ func endpoint(apiEndpoint clusterv1.APIEndpoint) string {
 	return fmt.Sprintf("%s:%d", apiEndpoint.Host, apiEndpoint.Port)
 }
 
-var (
-	masterInitScriptTempl *template.Template
-	nodeInitScriptTempl   *template.Template
-)
-
-func init() {
-	masterInitScriptTempl = template.Must(template.New("masterInitScript").Parse(masterInitScript))
-	nodeInitScriptTempl = template.Must(template.New("nodeInitScript").Parse(nodeInitScript))
-}
-
 /*
  * TODO: Factor out the common parts of these scripts, break them into
  * components that can be used with RequeueAfterError
  */
 const masterInitScript = `#!/bin/bash
-TOKEN={{ .Token }}
-K8SVERSION={{ .Machine.Spec.Versions.Kubelet }}
-HOSTNAME={{ .MachineLabel }}
-NAMESPACE={{ .Machine.ObjectMeta.Namespace }}
+# <UDF name="token" label="The kubeadm join token to use for cluster init">
+# <UDF name="k8sversion" label="The Kubernetes version to use">
+# <UDF name="hostname" label="Hostname to use, should match linode label">
+# <UDF name="namespace" label="The Namespace used for this Cluster">
+# <UDF name="machinename" label="The name of the Machine object for this cluster member">
+# <UDF name="service_domain" label="The domain name to use for Kubernetes Services">
+# <UDF name="pod_cidr" label="Defines the Pod network address space">
+# <UDF name="service_cidr" label="Defines the Service network address space">
+
 MACHINE=$NAMESPACE
 MACHINE+="/"
-MACHINE+={{ .Machine.ObjectMeta.Name }}
-CONTROL_PLANE_VERSION={{ .Machine.Spec.Versions.ControlPlane }}
-SERVICE_DOMAIN={{ .Cluster.Spec.ClusterNetwork.ServiceDomain }}
-POD_CIDR={{ .PodCIDR }}
-SERVICE_CIDR={{ .ServiceCIDR }}
+MACHINE+=$MACHINENAME
 
 echo "masterscript" > /var/log/test.txt
 
@@ -281,15 +337,17 @@ echo done
 `
 
 const nodeInitScript = `#!/bin/bash
-TOKEN={{ .Token }}
-K8SVERSION={{ .Machine.Spec.Versions.Kubelet }}
-HOSTNAME={{ .MachineLabel }}
-NAMESPACE={{ .Machine.ObjectMeta.Namespace }}
+# <UDF name="token" label="The kubeadm join token to use for cluster init">
+# <UDF name="k8sversion" label="The Kubernetes version to use">
+# <UDF name="hostname" label="Hostname to use, should match linode label">
+# <UDF name="namespace" label="The Namespace used for this Cluster">
+# <UDF name="machinename" label="The name of the Machine object for this cluster member">
+# <UDF name="service_domain" label="The domain name to use for Kubernetes Services">
+# <UDF name="endpoint" label="The kube-apiserver endpoint to use">
+
 MACHINE=$NAMESPACE
 MACHINE+="/"
-MACHINE+={{ .Machine.ObjectMeta.Name }}
-SERVICE_DOMAIN={{ .Cluster.Spec.ClusterNetwork.ServiceDomain }}
-ENDPOINT={{ .MasterEndpoint }}
+MACHINE+=$MACHINENAME
 
 echo "masterscript" > /var/log/test.txt
 
