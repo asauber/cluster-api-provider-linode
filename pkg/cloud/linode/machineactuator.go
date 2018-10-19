@@ -127,41 +127,25 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 	}
 
 	if instance == nil {
-		label := lc.MachineLabel(cluster, machine)
-
-		/* Create or update StackScript for machine init */
-		token, err := getOrCreateJoinToken(lc.client, cluster)
+		token, err := getJoinToken(lc.client, cluster)
 		if err != nil {
 			return err
 		}
 
-		script, err := lc.getInitScript(token, cluster, machine, machineConfig)
+		initScript, err := lc.getInitScript(token, cluster, machine, machineConfig)
 		if err != nil {
 			return err
 		}
-
-		/* TODO: Very High Priority! Do not write out a StackScript per machine. Use UDFs instead */
-		createOpts := linodego.StackscriptCreateOptions{
-			Label:    label,
-			Script:   script,
-			IsPublic: false,
-		}
-
-		createOpts.Images = append(createOpts.Images, machineConfig.Image)
 
 		linodeClient, err := getLinodeAPIClient(lc.client, cluster)
 		if err != nil {
 			return fmt.Errorf("Error initializing Linode API client: %v", err)
 		}
 
-		stackscript, err := linodeClient.CreateStackscript(context.Background(), createOpts)
-		if err != nil {
-			return fmt.Errorf("Error creating a Linode Stackscript: %v", err)
-		}
-
 		/*
-		 * Use a bootstrap token as a random root password. Replace this if upstream
-		 * changes. Don't store this - the idea is that no one ever knows the root password.
+		 * Use a bootstrap token as a random root password. Replace this if the
+		 * function is removed upstream. Don't store this - the idea is that no one
+		 * ever knows the root password.
 		 */
 		rootPass, err := bootstraputil.GenerateBootstrapToken()
 		if err != nil {
@@ -171,14 +155,15 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 		/* TODO: Use the Cluster spec for reading a list of public AuthorizedKeys */
 
 		instance, err := linodeClient.CreateInstance(context.Background(), linodego.InstanceCreateOptions{
-			Region:         machineConfig.Region,
-			Type:           machineConfig.Type,
-			Label:          lc.MachineLabel(cluster, machine),
-			Image:          machineConfig.Image,
-			RootPass:       rootPass,
-			PrivateIP:      true,
-			StackScriptID:  stackscript.ID,
-			AuthorizedKeys: []string{"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCagK9ZjexjQrxmCvQpPm4Da7qM9tQ/ldqAHqbORTqkZbAMMm8ASkBYFP8de4+y+K/BxV2iNDo/A/0Jkaw7uJSrH645vWzCbeX2S+hQMaQp2C7HE4aua8pwjL5d1q/YnU/tiznq2Lf74BTp4/mrl4pcmOTZdlUOa/tTN0ZZlZas0+KW9dr9cn4X78HT6n7vN0TOuQQMWTsw1aFxgdNMUDf6as7Z+RzILdG5J7G7QjFBbRzcj/yaRZGpmpaPvP+KV9J+8KsnjvoMNJuvBYQapWqZqv1yUqN45J2UQ9vvJ7H/p2u8+lYvGZ0wVbRB7PTHnsR8bOSW1f0BPoMDWkW+9ZCN user@host"},
+			Region:          machineConfig.Region,
+			Type:            machineConfig.Type,
+			Label:           lc.MachineLabel(cluster, machine),
+			Image:           machineConfig.Image,
+			RootPass:        rootPass,
+			PrivateIP:       true,
+			StackScriptID:   initScript.stackScript.ID,
+			StackScriptData: initScript.stackScriptData,
+			AuthorizedKeys:  []string{"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCagK9ZjexjQrxmCvQpPm4Da7qM9tQ/ldqAHqbORTqkZbAMMm8ASkBYFP8de4+y+K/BxV2iNDo/A/0Jkaw7uJSrH645vWzCbeX2S+hQMaQp2C7HE4aua8pwjL5d1q/YnU/tiznq2Lf74BTp4/mrl4pcmOTZdlUOa/tTN0ZZlZas0+KW9dr9cn4X78HT6n7vN0TOuQQMWTsw1aFxgdNMUDf6as7Z+RzILdG5J7G7QjFBbRzcj/yaRZGpmpaPvP+KV9J+8KsnjvoMNJuvBYQapWqZqv1yUqN45J2UQ9vvJ7H/p2u8+lYvGZ0wVbRB7PTHnsR8bOSW1f0BPoMDWkW+9ZCN user@host"},
 		})
 		instanceCreationTimeoutSeconds := 600
 		if err == nil {

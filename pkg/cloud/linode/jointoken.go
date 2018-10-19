@@ -35,7 +35,7 @@ const (
 	joinTokenSecretName = "kubeadm-join-token"
 )
 
-func getOrCreateJoinToken(client client.Client, cluster *clusterv1.Cluster) (string, error) {
+func getJoinToken(client client.Client, cluster *clusterv1.Cluster) (string, error) {
 	// Look for a join token secret in the namespace of the Cluster object.
 	joinTokenSecret := &corev1.Secret{}
 	err := client.Get(context.Background(),
