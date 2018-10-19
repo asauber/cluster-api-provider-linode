@@ -16,6 +16,10 @@ spec:
       properties:
         apiVersion:
           type: string
+        authorizedKeys:
+          items:
+            type: string
+          type: array
         kind:
           type: string
         metadata:

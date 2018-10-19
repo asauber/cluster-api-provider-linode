@@ -35,7 +35,9 @@ func TestStorageLinodeMachineProviderConfig(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "foo",
 			Namespace: "default",
-		}}
+		},
+		Roles: *new([]MachineRole),
+	}
 	g := gomega.NewGomegaWithT(t)
 
 	// Test Create
