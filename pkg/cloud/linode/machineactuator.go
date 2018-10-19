@@ -18,15 +18,17 @@ limitations under the License.
 package linode
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	linodeconfigv1 "github.com/displague/cluster-api-provider-linode/pkg/apis/linodeproviderconfig/v1alpha1"
 	"github.com/golang/glog"
 	"github.com/linode/linodego"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -111,15 +113,23 @@ func (lc *LinodeClient) validateMachine(machine *clusterv1.Machine, config *lino
 
 func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
 	glog.Infof("Creating machine %v/%v", cluster.Name, machine.Name)
+
 	machineConfig, err := machineProviderConfig(machine.Spec.ProviderConfig)
 	if err != nil {
 		return lc.handleMachineError(machine, apierrors.InvalidMachineConfiguration(
 			"Cannot unmarshal machine's providerConfig field: %v", err), createEventAction)
 	}
-
 	if verr := lc.validateMachine(machine, machineConfig); verr != nil {
 		return lc.handleMachineError(machine, verr, createEventAction)
 	}
+	glog.Infof("machineConfig %v", machineConfig)
+
+	glog.Infof("Creating cluster with config %v", cluster.Spec.ProviderConfig)
+	clusterConfig, err := clusterProviderConfig(cluster.Spec.ProviderConfig)
+	if err != nil {
+		return err
+	}
+	glog.Infof("Clusterconfig %v", clusterConfig)
 
 	instance, err := lc.instanceIfExists(cluster, machine)
 	if err != nil {
@@ -152,8 +162,6 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 			return fmt.Errorf("Couldn't generate random root password: %v", err)
 		}
 
-		/* TODO: Use the Cluster spec for reading a list of public AuthorizedKeys */
-
 		instance, err := linodeClient.CreateInstance(context.Background(), linodego.InstanceCreateOptions{
 			Region:          machineConfig.Region,
 			Type:            machineConfig.Type,
@@ -163,7 +171,7 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 			PrivateIP:       true,
 			StackScriptID:   initScript.stackScript.ID,
 			StackScriptData: initScript.stackScriptData,
-			AuthorizedKeys:  []string{"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCagK9ZjexjQrxmCvQpPm4Da7qM9tQ/ldqAHqbORTqkZbAMMm8ASkBYFP8de4+y+K/BxV2iNDo/A/0Jkaw7uJSrH645vWzCbeX2S+hQMaQp2C7HE4aua8pwjL5d1q/YnU/tiznq2Lf74BTp4/mrl4pcmOTZdlUOa/tTN0ZZlZas0+KW9dr9cn4X78HT6n7vN0TOuQQMWTsw1aFxgdNMUDf6as7Z+RzILdG5J7G7QjFBbRzcj/yaRZGpmpaPvP+KV9J+8KsnjvoMNJuvBYQapWqZqv1yUqN45J2UQ9vvJ7H/p2u8+lYvGZ0wVbRB7PTHnsR8bOSW1f0BPoMDWkW+9ZCN user@host"},
+			AuthorizedKeys:  clusterConfig.AuthorizedKeys,
 		})
 		instanceCreationTimeoutSeconds := 600
 		if err == nil {
@@ -189,13 +197,21 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 }
 
 func (lc *LinodeClient) updateClusterEndpoint(cluster *clusterv1.Cluster, instance *linodego.Instance) error {
-	glog.Infof("Updating cluster endpoint %v.\n", instance.IPv4[0].String())
-	cluster.Status.APIEndpoints = []clusterv1.APIEndpoint{{
-		Host: instance.IPv4[0].String(),
-		Port: 6443,
-	}}
-	err := lc.client.Update(context.Background(), cluster)
-	return err
+	/* Find the public IPv4 address for the master instance */
+	/* TODO: When we support HA masters, this will be a load balancer hostname */
+	for _, ip := range instance.IPv4 {
+		ipString := ip.String()
+		if !strings.HasPrefix(ipString, "192.168.") {
+			glog.Infof("Updating cluster endpoint %v.\n", ipString)
+			cluster.Status.APIEndpoints = []clusterv1.APIEndpoint{{
+				Host: ipString,
+				Port: 6443,
+			}}
+			err := lc.client.Update(context.Background(), cluster)
+			return err
+		}
+	}
+	return fmt.Errorf("Could not determine endpoint for machine %v", instance)
 }
 
 func (lc *LinodeClient) handleMachineError(machine *clusterv1.Machine, err *apierrors.MachineError, eventAction string) error {
@@ -240,9 +256,10 @@ func (lc *LinodeClient) Exists(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 
 func clusterProviderConfig(providerConfig clusterv1.ProviderConfig) (*linodeconfigv1.LinodeClusterProviderConfig, error) {
 	var config linodeconfigv1.LinodeClusterProviderConfig
-	if err := yaml.Unmarshal(providerConfig.Value.Raw, &config); err != nil {
+	if err := json.Unmarshal(providerConfig.Value.Raw, &config); err != nil {
 		return nil, err
 	}
+	glog.Infof("config %v", string(providerConfig.Value.Raw))
 	return &config, nil
 }
 
@@ -255,6 +272,7 @@ func machineProviderConfig(providerConfig clusterv1.ProviderConfig) (*linodeconf
 	if err := yaml.Unmarshal(providerConfig.Value.Raw, &config); err != nil {
 		return nil, err
 	}
+	glog.Infof("machine config %v", string(providerConfig.Value.Raw))
 	return &config, nil
 }
 

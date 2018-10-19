@@ -545,6 +545,14 @@
   revision = "dd632973f1e7218eb1089048e0798ec9ae7dceb8"
 
 [[projects]]
+  branch = "v1"
+  digest = "1:4384086c0f7f9e662c2ae8e900af35dc75ff262205b362597bb65af2fd8a21c9"
+  name = "gopkg.in/yaml.v1"
+  packages = ["."]
+  pruneopts = "T"
+  revision = "9f9df34309c04878acc86042b16630b0f696e1de"
+
+[[projects]]
   digest = "1:342378ac4dcb378a5448dd723f0784ae519383532f5e70ade24132c4c8693202"
   name = "gopkg.in/yaml.v2"
   packages = ["."]
@@ -705,6 +713,8 @@
     "restmapper",
     "third_party/forked/golang/template",
     "tools/auth",
+    "tools/bootstrap/token/api",
+    "tools/bootstrap/token/util",
     "tools/cache",
     "tools/clientcmd",
     "tools/clientcmd/api",
@@ -730,17 +740,6 @@
   pruneopts = "T"
   revision = "1f13a808da65775f22cbf47862c4e5898d8f4ca1"
   version = "kubernetes-1.11.2"
-
-[[projects]]
-  branch = "master"
-  digest = "1:da6051b29515d21d8e400ab5b08e852d747a2a071a8b075b7193c6c469d583e2"
-  name = "k8s.io/cluster-bootstrap"
-  packages = [
-    "token/api",
-    "token/util",
-  ]
-  pruneopts = "T"
-  revision = "345cb50e92869ee605a0d9b20f92ebe419a529e2"
 
 [[projects]]
   branch = "master"
@@ -871,19 +870,21 @@
     "github.com/onsi/gomega",
     "golang.org/x/net/context",
     "golang.org/x/oauth2",
-    "gopkg.in/yaml.v2",
+    "gopkg.in/yaml.v1",
     "k8s.io/api/core/v1",
     "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1",
+    "k8s.io/apimachinery/pkg/api/errors",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/apimachinery/pkg/runtime",
     "k8s.io/apimachinery/pkg/runtime/schema",
     "k8s.io/apimachinery/pkg/runtime/serializer/json",
     "k8s.io/apimachinery/pkg/types",
+    "k8s.io/apimachinery/pkg/util/wait",
     "k8s.io/client-go/kubernetes/scheme",
     "k8s.io/client-go/plugin/pkg/client/auth/gcp",
     "k8s.io/client-go/rest",
+    "k8s.io/client-go/tools/bootstrap/token/util",
     "k8s.io/client-go/tools/record",
-    "k8s.io/cluster-bootstrap/token/util",
     "k8s.io/code-generator/cmd/deepcopy-gen",
     "sigs.k8s.io/cluster-api/pkg/apis",
     "sigs.k8s.io/cluster-api/pkg/apis/cluster/common",

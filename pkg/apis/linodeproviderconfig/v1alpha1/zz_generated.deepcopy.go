@@ -29,6 +29,11 @@ func (in *LinodeClusterProviderConfig) DeepCopyInto(out *LinodeClusterProviderCo
 	*out = *in
 	out.TypeMeta = in.TypeMeta
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	if in.AuthorizedKeys != nil {
+		in, out := &in.AuthorizedKeys, &out.AuthorizedKeys
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 
