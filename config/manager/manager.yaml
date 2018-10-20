@@ -62,8 +62,6 @@ spec:
           mountPath: /etc/kubernetes
         - name: certs
           mountPath: /etc/ssl/certs
-        - name: instance-init
-          mountPath: /etc/instanceinit
         resources:
           limits:
             cpu: 100m
@@ -78,7 +76,4 @@ spec:
       - name: certs
         hostPath:
           path: /etc/ssl/certs
-      - name: instance-init
-        configMap:
-          name: instance-init
       terminationGracePeriodSeconds: 10
