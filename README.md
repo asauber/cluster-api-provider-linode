@@ -149,18 +149,5 @@ kubectl --kubeconfig kubeconfig get nodes
 kubectl --kubeconfig kubeconfig get all --all-namespaces
 ```
 
-The cluster is fully functional when at least the following services are runnning
+The cluster is fully functional when at least the following services are runnning: kube-apiserver, kube-controller-manager, kube-proxy, kube-scheduler, etcd, coredns, CNI (Calico)
 
-```
-NAMESPACE     NAME                                                   READY     STATUS    RESTARTS   AGE
-kube-system   calico-node-gb75n                                      2/2       Running   0          15m
-kube-system   calico-node-mjtqv                                      2/2       Running   0          15m
-kube-system   coredns-78fcdf6894-6tbxc                               1/1       Running   0          15m
-kube-system   coredns-78fcdf6894-6zgpp                               1/1       Running   0          15m
-kube-system   etcd-cluster01-kbkwk-master-9ggst                      1/1       Running   0          15m
-kube-system   kube-apiserver-cluster01-kbkwk-master-9ggst            1/1       Running   0          15m
-kube-system   kube-controller-manager-cluster01-kbkwk-master-9ggst   1/1       Running   0          15m
-kube-system   kube-proxy-g8fc6                                       1/1       Running   0          15m
-kube-system   kube-proxy-sc5km                                       1/1       Running   0          15m
-kube-system   kube-scheduler-cluster01-kbkwk-master-9ggst            1/1       Running   0          15m
-```
