@@ -18,7 +18,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"github.com/golang/glog"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -32,34 +31,6 @@ type LinodeClusterProviderConfig struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	AuthorizedKeys []string `json:"authorizedKeys,omitempty"`
-}
-
-func (c *LinodeClusterProviderConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type temp LinodeClusterProviderConfig
-
-	t := (*temp)(c)
-
-	glog.Info("in UnmarshalYAML")
-
-	var m map[string]interface{}
-
-	errUnmarshal := unmarshal(&m)
-
-	if errUnmarshal != nil {
-		return errUnmarshal
-	}
-
-	glog.Infof("in UnmarshalYAML: raw result is %#v", m)
-
-	errUnmarshal = unmarshal(t)
-
-	if errUnmarshal != nil {
-		return errUnmarshal
-	}
-
-	glog.Infof("in UnmarshalYAML: meta value is %#v", t.TypeMeta)
-
-	return nil
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
