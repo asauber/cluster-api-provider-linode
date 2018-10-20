@@ -1,3 +1,3 @@
 version: "1"
 domain: linode.com
-repo: github.com/displague/cluster-api-provider-linode
+repo: github.com/asauber/cluster-api-provider-linode

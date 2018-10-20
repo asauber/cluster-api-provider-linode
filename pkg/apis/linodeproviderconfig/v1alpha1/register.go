@@ -20,7 +20,7 @@ limitations under the License.
 // Package v1alpha1 contains API Schema definitions for the linodeproviderconfig v1alpha1 API group
 // +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=package,register
-// +k8s:conversion-gen=github.com/displague/cluster-api-provider-linode/pkg/apis/linodeproviderconfig
+// +k8s:conversion-gen=github.com/asauber/cluster-api-provider-linode/pkg/apis/linodeproviderconfig
 // +k8s:defaulter-gen=TypeMeta
 // +groupName=linodeproviderconfig.linode.com
 package v1alpha1
