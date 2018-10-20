@@ -21,9 +21,9 @@ import (
 	"flag"
 	"log"
 
-	"github.com/displague/cluster-api-provider-linode/pkg/apis"
-	"github.com/displague/cluster-api-provider-linode/pkg/cloud/linode"
-	"github.com/displague/cluster-api-provider-linode/pkg/controller"
+	"github.com/asauber/cluster-api-provider-linode/pkg/apis"
+	"github.com/asauber/cluster-api-provider-linode/pkg/cloud/linode"
+	"github.com/asauber/cluster-api-provider-linode/pkg/controller"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	clusterapis "sigs.k8s.io/cluster-api/pkg/apis"
 	clustercommon "sigs.k8s.io/cluster-api/pkg/apis/cluster/common"

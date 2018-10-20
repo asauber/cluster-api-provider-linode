@@ -18,7 +18,7 @@ limitations under the License.
 package apis
 
 import (
-	"github.com/displague/cluster-api-provider-linode/pkg/apis/linodeproviderconfig/v1alpha1"
+	"github.com/asauber/cluster-api-provider-linode/pkg/apis/linodeproviderconfig/v1alpha1"
 )
 
 func init() {

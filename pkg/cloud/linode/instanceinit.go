@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	linodeconfigv1 "github.com/displague/cluster-api-provider-linode/pkg/apis/linodeproviderconfig/v1alpha1"
+	linodeconfigv1 "github.com/asauber/cluster-api-provider-linode/pkg/apis/linodeproviderconfig/v1alpha1"
 	"github.com/golang/glog"
 	"github.com/linode/linodego"
 	"golang.org/x/net/context"
