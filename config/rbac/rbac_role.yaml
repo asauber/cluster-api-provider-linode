@@ -46,7 +46,9 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - secrets
   - nodes
+  - events
   verbs:
   - get
   - list

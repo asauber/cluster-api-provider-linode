@@ -1,0 +1,7 @@
+out/
+cluster.yaml
+clusters.yaml
+machine.yaml
+machines.yaml
+node.yaml
+nodes.yaml
