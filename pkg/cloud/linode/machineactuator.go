@@ -18,17 +18,16 @@ limitations under the License.
 package linode
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 
 	linodeconfigv1 "github.com/displague/cluster-api-provider-linode/pkg/apis/linodeproviderconfig/v1alpha1"
+	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
 	"github.com/linode/linodego"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
-	yaml "gopkg.in/yaml.v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -122,14 +121,11 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 	if verr := lc.validateMachine(machine, machineConfig); verr != nil {
 		return lc.handleMachineError(machine, verr, createEventAction)
 	}
-	glog.Infof("machineConfig %v", machineConfig)
 
-	glog.Infof("Creating cluster with config %v", cluster.Spec.ProviderConfig)
 	clusterConfig, err := clusterProviderConfig(cluster.Spec.ProviderConfig)
 	if err != nil {
 		return err
 	}
-	glog.Infof("Clusterconfig %v", clusterConfig)
 
 	instance, err := lc.instanceIfExists(cluster, machine)
 	if err != nil {
@@ -256,10 +252,9 @@ func (lc *LinodeClient) Exists(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 
 func clusterProviderConfig(providerConfig clusterv1.ProviderConfig) (*linodeconfigv1.LinodeClusterProviderConfig, error) {
 	var config linodeconfigv1.LinodeClusterProviderConfig
-	if err := json.Unmarshal(providerConfig.Value.Raw, &config); err != nil {
+	if err := yaml.Unmarshal(providerConfig.Value.Raw, &config); err != nil {
 		return nil, err
 	}
-	glog.Infof("config %v", string(providerConfig.Value.Raw))
 	return &config, nil
 }
 
@@ -272,7 +267,6 @@ func machineProviderConfig(providerConfig clusterv1.ProviderConfig) (*linodeconf
 	if err := yaml.Unmarshal(providerConfig.Value.Raw, &config); err != nil {
 		return nil, err
 	}
-	glog.Infof("machine config %v", string(providerConfig.Value.Raw))
 	return &config, nil
 }
 
@@ -281,7 +275,6 @@ func (lc *LinodeClient) instanceIfExists(cluster *clusterv1.Cluster, machine *cl
 	identifyingMachine := machine
 
 	// Try to use the last saved status locating the machine
-	// in case instance details like the proj or zone has changed
 	status, err := lc.instanceStatus(machine)
 	if err != nil {
 		return nil, err
