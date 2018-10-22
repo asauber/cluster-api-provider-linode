@@ -149,5 +149,15 @@ kubectl --kubeconfig kubeconfig get nodes
 kubectl --kubeconfig kubeconfig get all --all-namespaces
 ```
 
-The cluster is fully functional when at least the following services are runnning: kube-apiserver, kube-controller-manager, kube-proxy, kube-scheduler, etcd, coredns, CNI (Calico)
+The cluster is fully functional when at least the following services are
+runnning: kube-apiserver, kube-controller-manager, kube-proxy, kube-scheduler,
+etcd, coredns, CNI (Calico)
 
+### Deleting a cluster
+
+Use the following script to delete a cluster deployed with this API. The first
+argument must be a namespace used for cluster resources.
+
+```bash
+hack/delete_cluster.sh cluster01
+```
