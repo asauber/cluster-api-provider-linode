@@ -161,3 +161,32 @@ argument must be a namespace used for cluster resources.
 ```bash
 hack/delete_cluster.sh cluster01
 ```
+
+## Development
+
+When using a kustomize-rendered provider-components.yaml, the
+cluster-api-provider-linode controllers are deployed from a container
+registry (currently asauber/cluster-api-provider-linode on Docker Hub). To
+work on development, you can use a make target which compiles and runs the
+controllers on your local machine. 
+
+Follow the above instructions above to deploy the CRDs, upstream controllers,
+and other required resources to your cluster.
+
+Delete the service and statefulset for the provider controllers,
+because you'll be running it locally.
+
+```bash
+kubectl delete statefulset cluster-api-provider-linode-controller-manager -n cluster-api-provider-linode-system
+kubectl delete services cluster-api-provider-linode-controller-manager-service -n cluster-api-provider-linode-system
+```
+
+Use the make target to compile and run the controller locally. This will use
+the kubeconfig at ~/.kube/config
+
+```bash
+make run
+```
+
+You will immediately see Info-level logging output on your terminal if you
+have deployed Cluster or Machine resources.
