@@ -83,6 +83,10 @@ First, start minikube
 
 ```
 minikube start
+# As of 2018-11-06 there is a memory leak in the cluster master components that
+# may require more resources of minikube. You can start minikube with more
+# resources as follows.
+minikube --memory 8192 --cpus 2 start
 ```
 
 Next, use `kustomize` to render the templates for the provider components.
