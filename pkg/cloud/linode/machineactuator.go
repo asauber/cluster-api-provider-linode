@@ -20,6 +20,7 @@ package linode
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	linodeconfigv1 "github.com/asauber/cluster-api-provider-linode/pkg/apis/linodeproviderconfig/v1alpha1"
@@ -45,10 +46,11 @@ const (
 )
 
 const (
-	createEventAction        = "Create"
-	deleteEventAction        = "Delete"
-	noEventAction            = ""
-	linodeAPITokenSecretName = "linode-api-token"
+	createEventAction             = "Create"
+	deleteEventAction             = "Delete"
+	noEventAction                 = ""
+	linodeAPITokenSecretName      = "linode-api-token"
+	machineLinodeIDAnnotationName = "linode-id"
 )
 
 type LinodeClient struct {
@@ -189,10 +191,19 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 		lc.eventRecorder.Eventf(machine, corev1.EventTypeNormal, "Created", "Created Machine %v", machine.Name)
 
 		/* Annotate Machine object with Linode ID */
+		lc.AnnotateMachine(machine, machineLinodeIDAnnotationName, strconv.FormatInt(int64(instance.ID), 10))
 	} else {
 		glog.Infof("Skipped creating a VM that already exists.\n")
 	}
 	return nil
+}
+
+func (lc *LinodeClient) AnnotateMachine(machine *clusterv1.Machine, key string, value string) error {
+	if machine.ObjectMeta.Annotations == nil {
+		machine.ObjectMeta.Annotations = make(map[string]string)
+	}
+	machine.ObjectMeta.Annotations[key] = value
+	return lc.client.Update(context.Background(), machine)
 }
 
 func (lc *LinodeClient) updateClusterEndpoint(cluster *clusterv1.Cluster, instance *linodego.Instance) error {
@@ -233,8 +244,26 @@ func (lc *LinodeClient) handleMachineError(machine *clusterv1.Machine, err *apie
 }
 
 func (lc *LinodeClient) Delete(cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
-	glog.Infof("TODO (Not Implemented): Deleting machine with cluster %v.", cluster.Name)
-	glog.Infof("TODO (Not Implemented): Deleting machine %v.", machine.Name)
+	linodeIDStr, ok := machine.ObjectMeta.Annotations[machineLinodeIDAnnotationName]
+	if !ok {
+		return fmt.Errorf("Error deleting machine, no Linode ID annotation")
+	}
+	glog.Infof("Deleting Linode with ID %s", linodeIDStr)
+
+	linodeID, err := strconv.Atoi(linodeIDStr)
+	if err != nil {
+		return fmt.Errorf("Error converting Linode ID annotation to integer")
+	}
+
+	linodeClient, err := getLinodeAPIClient(lc.client, cluster)
+	if err != nil {
+		return fmt.Errorf("Error initializing Linode API client: %v", err)
+	}
+
+	err = linodeClient.DeleteInstance(context.Background(), linodeID)
+	if err != nil {
+		return fmt.Errorf("Error deleting Linode %d", linodeID)
+	}
 	return nil
 }
 
