@@ -100,6 +100,8 @@ func getLinodeAPIClient(client client.Client, cluster *clusterv1.Cluster) (*lino
 		},
 	}
 	linodeClient := linodego.NewClient(oauth2Client)
+	linodeClient.SetUserAgent(fmt.Sprintf("cluster-api-provider-linode %s", linodego.DefaultUserAgent))
+	// linodeClient.SetDebug(true)
 	return &linodeClient, nil
 }
 
