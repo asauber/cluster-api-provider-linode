@@ -46,7 +46,7 @@ curl -Lo minikube https://storage.googleapis.com/minikube/releases/v0.28.1/minik
 * `virtualbox` on macOS or [`kvm2`](https://github.com/kubernetes/minikube/blob/master/docs/drivers.md) on Linux.
 
 ```bash
-brew cask install virutalbox
+brew cask install virtualbox
 ```
 
 * [Linode API Access Token generated](https://cloud.linode.com/profile/tokens) and set as the `LINODE_TOKEN` environment variable
