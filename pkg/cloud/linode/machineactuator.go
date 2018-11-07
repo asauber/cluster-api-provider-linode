@@ -187,7 +187,8 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 		}
 
 		lc.eventRecorder.Eventf(machine, corev1.EventTypeNormal, "Created", "Created Machine %v", machine.Name)
-		/* TODO: Annotate Machine object with Linode ID */
+
+		/* Annotate Machine object with Linode ID */
 	} else {
 		glog.Infof("Skipped creating a VM that already exists.\n")
 	}
