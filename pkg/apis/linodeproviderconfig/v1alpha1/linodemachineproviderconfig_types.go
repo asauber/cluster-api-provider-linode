@@ -41,6 +41,7 @@ type LinodeMachineProviderConfig struct {
 	Region string        `json:"region"`
 	Type   string        `json:"type"`
 	Image  string        `json:"image"`
+	Pubkey string        `json:"pubkey"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

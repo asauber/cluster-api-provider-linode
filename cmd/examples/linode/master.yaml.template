@@ -1,0 +1,20 @@
+apiVersion: "cluster.k8s.io/v1alpha1"
+kind: Machine
+metadata:
+  generateName: master-
+  labels:
+    set: master
+  namespace: $CLUSTER_NAME
+spec:
+  providerConfig:
+    value:
+      apiVersion: "linodeproviderconfig/v1alpha1"
+      kind: "LinodeMachineProviderConfig"
+      roles:
+      - Master
+      region: "us-east"
+      type: "g6-standard-2"
+      image: "linode/ubuntu18.04"
+  versions:
+    kubelet: 1.11.3
+    controlPlane: 1.11.3
