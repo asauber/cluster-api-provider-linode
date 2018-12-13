@@ -13,3 +13,5 @@ bin/
 *.out
 
 provider-components.yaml
+
+./*.conf

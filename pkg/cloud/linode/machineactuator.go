@@ -168,7 +168,7 @@ func (lc *LinodeClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Ma
 			Label:           lc.MachineLabel(cluster, machine),
 			Image:           machineConfig.Image,
 			RootPass:        rootPass,
-			PrivateIP:       true,
+			PrivateIP:       false,
 			StackScriptID:   initScript.stackScript.ID,
 			StackScriptData: initScript.stackScriptData,
 			AuthorizedKeys:  clusterConfig.AuthorizedKeys,
@@ -203,6 +203,7 @@ func (lc *LinodeClient) AnnotateMachine(machine *clusterv1.Machine, key string, 
 		machine.ObjectMeta.Annotations = make(map[string]string)
 	}
 	machine.ObjectMeta.Annotations[key] = value
+	glog.Infof("Annotating machine with %s: %s", key, value)
 	return lc.client.Update(context.Background(), machine)
 }
 
