@@ -22,6 +22,10 @@ spec:
           type: string
         metadata:
           type: object
+        privkeysecfetname:
+          items:
+            type: string
+          type: array
         pubkey:
           type: string
         region:
@@ -37,6 +41,7 @@ spec:
       - type
       - image
       - pubkey
+      - privkeysecfetname
   version: v1alpha1
 status:
   acceptedNames:

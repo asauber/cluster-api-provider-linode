@@ -98,6 +98,11 @@ func (in *LinodeMachineProviderConfig) DeepCopyInto(out *LinodeMachineProviderCo
 		*out = make([]MachineRole, len(*in))
 		copy(*out, *in)
 	}
+	if in.Privkeysecretname != nil {
+		in, out := &in.Privkeysecretname, &out.Privkeysecretname
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 

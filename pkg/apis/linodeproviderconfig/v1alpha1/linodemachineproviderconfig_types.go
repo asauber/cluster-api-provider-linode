@@ -37,11 +37,12 @@ type LinodeMachineProviderConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Roles  []MachineRole `json:"roles,omitempty"`
-	Region string        `json:"region"`
-	Type   string        `json:"type"`
-	Image  string        `json:"image"`
-	Pubkey string        `json:"pubkey"`
+	Roles             []MachineRole `json:"roles,omitempty"`
+	Region            string        `json:"region"`
+	Type              string        `json:"type"`
+	Image             string        `json:"image"`
+	Pubkey            string        `json:"pubkey"`
+	Privkeysecretname []string      `json:"privkeysecfetname"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
